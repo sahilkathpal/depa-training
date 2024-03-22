@@ -14,17 +14,17 @@ def main():
     st.set_page_config (layout="wide")
     scenariodir = os.path.dirname(os.path.realpath(__file__))
 
-    os.environ['AZURE_RESOURCE_GROUP'] = "kapilv-depa-rg"
-    os.environ['AZURE_STORAGE_ACCOUNT_NAME'] = "kapilvcovidstorage"
-    os.environ['AZURE_ICMR_CONTAINER_NAME'] = "kapilv-depa-icmr-container"
-    os.environ['AZURE_COWIN_CONTAINER_NAME'] = "kapilv-depa-cowin-container"
-    os.environ['AZURE_INDEX_CONTAINER_NAME'] = "kapilv-depa-index-container"
-    os.environ['AZURE_MODEL_CONTAINER_NAME'] = "kapilv-depa-model-container"
-    os.environ['AZURE_OUTPUT_CONTAINER_NAME'] = "kapilv-depa-output-container"
-    os.environ['CONTAINER_REGISTRY'] = "kapilvaswani"
-    os.environ['TOOLS_HOME'] = "/home/kapilv/depa-training/external/confidential-sidecar-containers/tools"
-    os.environ['CONTRACT_SERVICE_URL'] = "https://kapilv-github-runner.westeurope.cloudapp.azure.com:8000"
-    os.environ['AZURE_KEYVAULT_ENDPOINT'] = "kapilv-vault.vault.azure.net"
+    os.environ['AZURE_RESOURCE_GROUP'] = "depa-ccr-test"
+    os.environ['AZURE_STORAGE_ACCOUNT_NAME'] = "depacovidteststorage1"
+    os.environ['AZURE_ICMR_CONTAINER_NAME'] = "icmrcontainer"
+    os.environ['AZURE_COWIN_CONTAINER_NAME'] = "cowincontainer"
+    os.environ['AZURE_INDEX_CONTAINER_NAME'] = "indexcontainer"
+    os.environ['AZURE_MODEL_CONTAINER_NAME'] = "modelcontainer"
+    os.environ['AZURE_OUTPUT_CONTAINER_NAME'] = "outputcontainer"
+    os.environ['CONTAINER_REGISTRY'] = "sahilkathpal"
+    os.environ['TOOLS_HOME'] = "/root/depa-training/external/confidential-sidecar-containers/tools"
+    os.environ['CONTRACT_SERVICE_URL'] = "https://165.22.220.72:8000"
+    os.environ['AZURE_KEYVAULT_ENDPOINT'] = "depa-covid-key-vault-1.vault.azure.net"
 
     st.title('DEPA for Training Demo')
     st.caption('Sample cowin data')
@@ -59,6 +59,7 @@ def main():
         st.caption('Sample state war room data')
         index = pd.read_csv(scenariodir + "/data/index/preprocessed/dp_index_standardised_anon.csv")
         st.dataframe(index)
+        
 
     if st.button('Generate and import keys'):
         result = subprocess.run(["bash", "3-import-keys.sh"],
@@ -86,28 +87,28 @@ def main():
         os.environ['CONTRACT_URL'] = os.environ['CONTRACT_SERVICE_URL']
 
         result = subprocess.run(["curl", "https://" + tdp + ".github.io/.well-known/did.json"], 
-                                cwd="/home/kapilv/depa-training/external/contract-ledger",
+                                cwd="/root/depa-training/external/contract-ledger",
                                 capture_output=True)
         st.write("TDP DID Document")
         st.json(result.stdout.decode('utf-8'))
 
         result = subprocess.run(["curl", "https://" + tdc + ".github.io/.well-known/did.json"], 
-                                cwd="/home/kapilv/depa-training/external/contract-ledger",
+                                cwd="/root/depa-training/external/contract-ledger",
                                 capture_output=True)
         st.write("TDC DID Document")
         st.json(result.stdout.decode('utf-8'))
 
     if st.button('Generate Contract'):
         result = subprocess.run(["bash", "demo/contract/update-contract.sh"], 
-                                cwd="/home/kapilv/depa-training/external/contract-ledger")
-        f = open("/home/kapilv/depa-training/external/contract-ledger/tmp/contracts/contract.json")
+                                cwd="/root/contract-ledger")
+        f = open("/root/contract-ledger/tmp/contracts/contract.json")
         st.json(f.read())
 
     if st.button('Sign and register contract as TDP'):
         result = subprocess.run(["bash", "demo/contract/3-sign-contract.sh"], 
-                                cwd="/home/kapilv/depa-training/external/contract-ledger")
+                                cwd="/root/contract-ledger")
         result = subprocess.run(["bash", "demo/contract/4-register-contract.sh"], 
-                                cwd="/home/kapilv/depa-training/external/contract-ledger", 
+                                cwd="/root/contract-ledger", 
                                 capture_output=True)
         if result.returncode == 0:
           st.write(result.stdout)
@@ -115,11 +116,11 @@ def main():
     contract = st.text_input('Contract ID')
     if st.button('Sign and register contract as TDC'):
         result = subprocess.run(["bash", "demo/contract/8-retrieve-contract.sh", contract], 
-                                cwd="/home/kapilv/depa-training/external/contract-ledger")
+                                cwd="/root/contract-ledger")
         result = subprocess.run(["bash", "demo/contract/9-sign-contract.sh", contract], 
-                                cwd="/home/kapilv/depa-training/external/contract-ledger")
+                                cwd="/root/contract-ledger")
         result = subprocess.run(["bash", "demo/contract/10-register-contract.sh"], 
-                                cwd="/home/kapilv/depa-training/external/contract-ledger",
+                                cwd="/root/contract-ledger",
                                 capture_output=True)
         if result.returncode == 0:
           st.write(result.stdout)
@@ -157,20 +158,27 @@ def main():
             st.success("Model exported in ONNX format")
 
     st.subheader('Train model in CCR')
-    st.write('Sample model configuration')
-    f = open(scenariodir + "/config/model_config.json")
+    st.write('Sample model pipeline configuration')
+    f = open(scenariodir + "/config/pipeline_config.json")
     st.json(f.read())
 
     contract = st.text_input('Signed contract ID')
     
     if st.button('Deploy CCR'):
-        result = subprocess.run(["bash", "deploy.sh", "-c", contract, "-q", "../../config/query_config.json", "-m", "../../config/model_config.json"], 
+        result = subprocess.run(["bash", "deploy.sh", "-c", contract, "-p", "../../config/pipeline_config.json"], 
                                 cwd = scenariodir + "/deployment/aci")
         if result.returncode == 0:
             st.success("CCR deployed")
 
     if st.button('Get CCR logs'):
         run_and_display_stdout("bash", "az", "container", "logs", "--name", "depa-training-covid", "--resource-group", os.environ['AZURE_RESOURCE_GROUP'],  "--container-name", "depa-training", cwd = scenariodir + "/deployment/aci")
+
+    if st.button('Export trained model'):
+        result = subprocess.run(["bash", "6-download-decrypt-model.sh"], 
+                                cwd=scenariodir + "/data")
+        if result.returncode == 0:
+            st.success("Model ready to download")
+
 
 if __name__ == "__main__":
     main()
